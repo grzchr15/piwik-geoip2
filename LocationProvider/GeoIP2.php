@@ -8,6 +8,7 @@
  * @author  Krzysztof Szatanik <chris.szatanik@gmail.com>
  *
  */
+
 namespace Piwik\Plugins\GeoIP2\LocationProvider;
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -25,6 +26,7 @@ class GeoIp2 extends LocationProvider
 {
     const ID = 'geoip2_php';
     const TITLE = 'GeoIP 2';
+    const TEST_IP = '194.57.91.215';
 
     public static $geoIPDatabaseDir = 'misc';
 
@@ -66,12 +68,13 @@ class GeoIp2 extends LocationProvider
     /**
      * Constructor.
      *
-     * @param array|bool $customDbNames      The possible filenames for each type of GeoIP database.
+     * @param array|bool $customDbNames The possible filenames for each type of GeoIP database.
      *                                       If a key is missing (or the parameter not supplied), then the
      *                                       default database names are used.
      */
     public function __construct($customDbNames = false)
     {
+//        die($customDbNames);
         $this->customDbNames = self::$dbNames;
         if ($customDbNames !== false) {
             foreach ($this->customDbNames as $key => $names) {
@@ -98,9 +101,7 @@ class GeoIp2 extends LocationProvider
         $desc        = 'MaxMind GeoIP v2 database'
             . '<p><a href="https://github.com/diabl0/piwik-geoip2/wiki/How-do-I-get-the-GeoIP-2-databases%3F" rel="noreferrer"  target="_blank">'
             . 'How do I get the GeoIP2 databases?'
-            . '</a></p>'
-
-        ;
+            . '</a></p>';
         $installDocs = 'Upload one of files: GeoIP2-City.mmdb, GeoLite2-City.mmdb, GeoIP2-Country.mmdb or GeoLite2-Country.mmdb into the misc Piwik subdirectory (you can do this either by FTP or SSH).';
 
         $availableDatabaseTypes = [];
@@ -111,9 +112,9 @@ class GeoIp2 extends LocationProvider
             $availableDatabaseTypes[] = Piwik::translate('UserCountry_Country');
         }
 
-        $extraMessage = '<strong><em>'.Piwik::translate('General_Note').'</em></strong>:&nbsp;'
-            .Piwik::translate('UserCountry_GeoIPImplHasAccessTo').':&nbsp;<strong><em>'
-            .implode(', ', $availableDatabaseTypes).'</em></strong>.';
+        $extraMessage = '<strong><em>' . Piwik::translate('General_Note') . '</em></strong>:&nbsp;'
+            . Piwik::translate('UserCountry_GeoIPImplHasAccessTo') . ':&nbsp;<strong><em>'
+            . implode(', ', $availableDatabaseTypes) . '</em></strong>.';
 
         return [
             'id'            => self::ID,
@@ -121,8 +122,37 @@ class GeoIp2 extends LocationProvider
             'description'   => $desc,
             'install_docs'  => $installDocs,
             'extra_message' => $extraMessage,
-            'order'         => 2,
+            'order'         => 20,
         ];
+    }
+
+    /**
+     * Returns the path of an existing GeoIP database or false if none can be found.
+     *
+     * @param array $possibleFileNames The list of possible file names for the GeoIP database.
+     * @return string|false
+     */
+    public static function getPathToGeoIpDatabase($possibleFileNames)
+    {
+        foreach ($possibleFileNames as $filename) {
+            $path = self::getPathForGeoIpDatabase($filename);
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns full path for a GeoIP database managed by Piwik.
+     *
+     * @param string $filename Name of the .dat file.
+     * @return string
+     */
+    public static function getPathForGeoIpDatabase($filename)
+    {
+        return PIWIK_INCLUDE_PATH . '/' . self::$geoIPDatabaseDir . '/' . $filename;
     }
 
     /**
@@ -141,7 +171,7 @@ class GeoIp2 extends LocationProvider
     public function getLocation($info)
     {
         $ip = $this->getIpFromInfo($info);
-//        $ip = '89.71.172.123';
+//        $ip = self::TEST_IP;
 
         $result = [];
         $reader = $this->getReader();
@@ -194,6 +224,8 @@ class GeoIp2 extends LocationProvider
 
         $this->completeLocationResult($result);
 
+        // echo '<pre>'; print_r($result); echo '</pre>';exit();
+
         return $result;
     }
 
@@ -212,7 +244,6 @@ class GeoIp2 extends LocationProvider
                     break;
                 }
             }
-
         }
 
         return $this->reader;
@@ -237,7 +268,6 @@ class GeoIp2 extends LocationProvider
         }
 
         return (isset($this->_isoRegionCodes[$countryCode][$regionIsoCode])) ? $this->_isoRegionCodes[$countryCode][$regionIsoCode] : null;
-
     }
 
     /**
@@ -266,16 +296,30 @@ class GeoIp2 extends LocationProvider
     {
         $result = [];
 
-        $result[self::CONTINENT_CODE_KEY] = true;
-        $result[self::CONTINENT_NAME_KEY] = true;
-        $result[self::COUNTRY_CODE_KEY]   = true;
-        $result[self::COUNTRY_NAME_KEY]   = true;
-        $result[self::REGION_CODE_KEY]    = true;
-        $result[self::REGION_NAME_KEY]    = true;
-        $result[self::CITY_NAME_KEY]      = true;
-        $result[self::LATITUDE_KEY]       = true;
-        $result[self::LONGITUDE_KEY]      = true;
-        $result[self::POSTAL_CODE_KEY]    = true;
+        $reader = $this->getReader();
+        switch ($reader->metadata()->databaseType) {
+            case 'GeoLite2-Country':
+            case 'GeoIP2-Country':
+                $result[self::CONTINENT_NAME_KEY] = true;
+                $result[self::CONTINENT_CODE_KEY] = true;
+                $result[self::COUNTRY_CODE_KEY]   = true;
+                $result[self::COUNTRY_NAME_KEY]   = true;
+                break;
+            case 'GeoLite2-City':
+            case 'GeoIP2-City':
+                $result[self::CONTINENT_NAME_KEY] = true;
+                $result[self::CONTINENT_CODE_KEY] = true;
+                $result[self::COUNTRY_CODE_KEY]   = true;
+                $result[self::COUNTRY_NAME_KEY]   = true;
+                $result[self::CITY_NAME_KEY]      = true;
+                $result[self::LATITUDE_KEY]       = true;
+                $result[self::LONGITUDE_KEY]      = true;
+                $result[self::POSTAL_CODE_KEY]    = true;
+                $result[self::REGION_CODE_KEY]    = true;
+                $result[self::COUNTRY_CODE_KEY]   = true;
+                $result[self::REGION_NAME_KEY]    = true;
+                break;
+        }
 
         return $result;
     }
@@ -309,34 +353,5 @@ class GeoIp2 extends LocationProvider
         }
 
         return 'None of supported databases was found.';
-    }
-
-    /**
-     * Returns the path of an existing GeoIP database or false if none can be found.
-     *
-     * @param array $possibleFileNames The list of possible file names for the GeoIP database.
-     * @return string|false
-     */
-    public static function getPathToGeoIpDatabase($possibleFileNames)
-    {
-        foreach ($possibleFileNames as $filename) {
-            $path = self::getPathForGeoIpDatabase($filename);
-            if (file_exists($path)) {
-                return $path;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Returns full path for a GeoIP database managed by Piwik.
-     *
-     * @param string $filename Name of the .dat file.
-     * @return string
-     */
-    public static function getPathForGeoIpDatabase($filename)
-    {
-        return PIWIK_INCLUDE_PATH.'/'.self::$geoIPDatabaseDir.'/'.$filename;
     }
 }

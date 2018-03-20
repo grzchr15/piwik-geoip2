@@ -8,6 +8,12 @@
 
 namespace Piwik\Plugins\GeoIP2;
 
-class GeoIP2 extends \Piwik\Plugin
+use Piwik\Plugin;
+
+class GeoIP2 extends Plugin
 {
+    public function isTrackerPlugin()
+    {
+        return true;
+    }
 }
